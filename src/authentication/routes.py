@@ -13,7 +13,7 @@ async def signupPlanner(userInput:UserInput, session:AsyncSession = Depends(get_
 
     planner = await authServices.signupPlanner(userInput, session)
     return {
-        "status": True,
+        "success": True,
         "message": "signup successful, an otp has been sent to your email to verify your account ",
         "data": planner
     }
@@ -24,7 +24,7 @@ async def signupVendor(userInput:UserInput, session:AsyncSession = Depends(get_S
     vendor = await authServices.signupVendor(userInput, session)
 
     return {
-        "status": True,
+        "success": True,
         "message": "signup successful, an otp has been sent to your email to verify your account ",
         "data": vendor
     }
