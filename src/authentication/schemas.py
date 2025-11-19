@@ -30,7 +30,7 @@ class UserInput(BaseModel):
 
 # Planner Schemas
 class PlannerCreate(BaseModel):
-    id: uuid.UUID 
+    user_id: uuid.UUID 
     email: str 
     email_verified: bool 
     created_at: datetime 
@@ -41,7 +41,7 @@ class PlannerCreateResponse(BaseModel):
     data: PlannerCreate
 
 class VendorCreate(BaseModel):
-    id: uuid.UUID 
+    user_id: uuid.UUID 
     email: str 
     email_verified: bool 
     created_at: datetime 

@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field, Column
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import sqlalchemy.dialects.postgresql as pg
 from typing import Optional, List, Dict
 from enum import Enum
@@ -40,7 +40,7 @@ class PriceRange(SQLModel):
 class Planners(SQLModel, table=True):
     __tablename__ = "planners"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     fullName: str
     email: str
     password_hash: str
@@ -55,7 +55,7 @@ class Planners(SQLModel, table=True):
 class Vendors(SQLModel, table=True):
     __tablename__ = "vendors"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     fullName: str
     email: str = Field(unique=True)
     password_hash: str
@@ -86,3 +86,16 @@ class Vendors(SQLModel, table=True):
         default_factory=utc_now,
         sa_column=Column(pg.TIMESTAMP(timezone=True))
     )
+
+def get_expiry_time():
+    return datetime.now(timezone.utc) + timedelta(minutes=10)
+
+class Otp(SQLModel, table=True):
+
+    __tablename__ = "Otp"
+    otp_id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    otp: str
+    user_id: uuid.UUID
+    expires: datetime = Field(
+        default_factory=get_expiry_time,
+        sa_column=Column(pg.TIMESTAMP(timezone=True)))
