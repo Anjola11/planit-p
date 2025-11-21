@@ -46,6 +46,8 @@ class Planners(SQLModel, table=True):
     password_hash: str
     profile_picture: Optional[str] = None
     email_verified: bool = False
+    role: str = Field(
+        default="planner")
     created_at: datetime = Field(
         default_factory=utc_now,
         sa_column=Column(pg.TIMESTAMP(timezone=True))
@@ -60,7 +62,8 @@ class Vendors(SQLModel, table=True):
     email: str = Field(unique=True)
     password_hash: str
     email_verified: bool = False
-
+    role: str = Field(
+        default="vendor")
     business_name: Optional[str] = None
     business_description: Optional[str] = None
     category: Optional[str] = None
@@ -96,6 +99,9 @@ class Otp(SQLModel, table=True):
     otp_id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     otp: str
     user_id: uuid.UUID
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(pg.TIMESTAMP(timezone=True)))
     expires: datetime = Field(
         default_factory=get_expiry_time,
         sa_column=Column(pg.TIMESTAMP(timezone=True)))

@@ -1,11 +1,12 @@
 from sqlmodel import select
 from src.authentication.models import Planners, Vendors
-from src.authentication.schemas import UserInput
+from src.authentication.schemas import UserInput, VerifyOtpInput
 from sqlmodel.ext.asyncio.session import AsyncSession
 from fastapi import HTTPException, status
 from sqlalchemy.exc import DatabaseError
 from src.utils.auth import generate_password_hash
-
+from src.authentication.models import Otp
+from datetime import datetime, timezone
 
 class AuthServices:
 
@@ -57,3 +58,90 @@ class AuthServices:
 
     async def signupVendor(self, vendorInput: UserInput, session: AsyncSession):
         return await self.signupUser(Vendors, vendorInput, session)
+
+
+    async def verify_otp(self, otp_input:VerifyOtpInput, session: AsyncSession):
+        otp_statement = (select(Otp)
+                     .where(Otp.user_id == otp_input.user_id)
+                     .order_by(Otp.created_at.desc()))
+        
+        result = await session.exec(otp_statement)
+        latest_otp_record = result.first()
+
+        if not latest_otp_record:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail={
+                    "success": False,
+                    "message": "no otp found for this user"
+                 })
+        
+        if latest_otp_record.otp != otp_input.otp:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail={
+                    "success": False,
+                    "message": "Invalid OTP code",
+                 })
+
+        if datetime.now(timezone.utc) > latest_otp_record.expires:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success":False,
+                    "message": "otp expired, get new otp"
+                }
+            )
+        
+        if otp_input.role == "vendor":
+            model = Vendors
+        elif otp_input.role == "planner":
+            model = Planners
+        else:
+            
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"success": False, 
+                        "message": "Invalid role provided"}
+            )
+
+        user_statement = select(model).where(model.user_id == otp_input.user_id)
+        result = await session.exec(user_statement)
+
+        user = result.first()
+
+        if not user:
+             raise HTTPException(
+                 status_code=status.HTTP_404_NOT_FOUND, 
+                 detail={
+                    "success": False,
+                    "message": "User not found"
+                 })
+        
+        try:
+            user.email_verified = True
+            session.add(user)
+            await session.delete(latest_otp_record)
+            await session.commit()
+            await session.refresh(user)
+            return user
+
+        except DatabaseError:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                 detail= {
+                    "success": False,
+                    "message": "Internal server error"
+                 }
+
+            )
+
+        
+        
+
+        
+        
+
+
+

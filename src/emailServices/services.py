@@ -3,42 +3,41 @@ from src.authentication.models import Otp
 from src.utils.otp import generate_otp
 from sqlalchemy.exc import DatabaseError
 from fastapi import HTTPException, status
-import sib_api_v3_sdk
-from sib_api_v3_sdk.rest import ApiException
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+import uuid
+
+#Email send Imports
+import brevo_python
+from brevo_python.rest import ApiException
+from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 from src.config import Config
 
-# --- Initialize Jinja2 Template Engine Globally ---
-# This ensures we don't reload templates on every email sent
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = BASE_DIR / "templates"
 
 template_env = Environment(
-    loader=FileSystemLoader(str(TEMPLATE_DIR)),
-    autoescape=select_autoescape(['html', 'xml'])
+    loader=FileSystemLoader(TEMPLATE_DIR)
 )
 
-class EmailServices:
-    def __init__(self):
-        self.brevo_api_key = Config.BREVO_API_KEY
-        self.sender_email = Config.BREVO_EMAIL
-        self.sender_name = "Planit"
-        
-        # Initialize Brevo API Client
-        self.configuration = sib_api_v3_sdk.Configuration()
-        self.configuration.api_key['api-key'] = self.brevo_api_key
-        self.api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(self.configuration))
 
-    async def save_otp(self, user_id: str, session: AsyncSession):
-        """
-        Generate and save an OTP to the database.
-        Returns the OTP object (containing the code).
-        """
+class EmailServices:
+
+    def __init__(self):
+        self.BREVO_API_KEY = Config.BREVO_API_KEY
+        self.BREVO_EMAIL = Config.BREVO_EMAIL
+        self.BREVO_SENDER_NAME = Config.BREVO_SENDER_NAME
+
+        self.configuration = brevo_python.Configuration()
+        self.configuration.api_key['api-key'] = self.BREVO_API_KEY
+        self.api_instance = brevo_python.TransactionalEmailsApi(brevo_python.ApiClient(self.configuration))
+
+    async def save_otp(self,user_id: uuid.UUID, session:AsyncSession):
         new_otp = Otp(
             otp=generate_otp(),
             user_id=user_id
         )
+
 
         try:
             session.add(new_otp)
@@ -54,36 +53,33 @@ class EmailServices:
                     "message": "Internal server error"
                 }
             )
+        
+    def render_template(self,template_name: str, payload: dict = {} ):
 
-    def render_template(self, template_name: str, payload: dict = {}) -> str:
-        """
-        Render email template with Jinja2
-        """
         try:
-            # Uses the global template_env defined at the top
-            # Assumes files are named like 'otp-verification.html'
             template = template_env.get_template(f"{template_name}.html")
             return template.render(**payload)
         except Exception as err:
             print(f"Error rendering template '{template_name}': {err}")
             raise err
-
+    
+    
     def send_email(self, to_email: str, subject: str, html_content: str, text_content: str) -> bool:
         """
         Base function to send emails via Brevo API
         """
-        if not self.brevo_api_key:
+        if not self.BREVO_API_KEY:
             print(f"Brevo API key not configured. Skipping email to: {to_email}")
             return False
 
-        # Create the sender object
-        sender = {"name": self.sender_name, "email": self.sender_email}
+        # sender object
+        sender = {"name": self.BREVO_SENDER_NAME, "email": self.BREVO_EMAIL}
         
-        # Create the recipient list
+        # recipient list
         to = [{"email": to_email}]
 
-        # Create the email object
-        send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+        # Email object
+        send_smtp_email = brevo_python.SendSmtpEmail(
             to=to,
             sender=sender,
             subject=subject,
@@ -92,20 +88,17 @@ class EmailServices:
         )
 
         try:
-            # Note: This is a blocking call (synchronous)
+            
             self.api_instance.send_transac_email(send_smtp_email)
             print(f"Email sent to {to_email}: {subject}")
             return True
         except ApiException as e:
             print(f"Error sending email: {e}")
             return False
-
-    async def send_otp_email(self, user_email: str, otp_code: str, user_name: str):
-        """
-        Send OTP verification email
-        """
-        # Renders src/templates/otp-verification.html
-        html = self.render_template('otp-verification', {
+    
+    def send_email_verification_otp(self, user_email: str, otp_code: str, user_name: str):
+        
+        html = self.render_template('email-otp-verification', {
             'username': user_name,
             'otpCode': otp_code,
             'expiryTime': '10 minutes'
@@ -120,14 +113,11 @@ The Planit Team"""
 
         return self.send_email(user_email, 'Planit - Email Verification Code', html, text_content)
 
-    async def send_welcome_email(self, user_email: str, user_name: str):
-        """
-        Send Welcome email
-        """
-        # Renders src/templates/welcome.html
+    def send_welcome_email(self, user_email: str, user_name: str):
+       
         html = self.render_template('welcome', {
             'username': user_name,
-            'email': user_email # passing email just in case template uses it later
+            'email': user_email 
         })
 
         text_content = f"""Welcome to Planit, {user_name}!

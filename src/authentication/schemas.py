@@ -33,6 +33,7 @@ class PlannerCreate(BaseModel):
     user_id: uuid.UUID 
     email: str 
     email_verified: bool 
+    role: str
     created_at: datetime 
 
 class PlannerCreateResponse(BaseModel):
@@ -43,10 +44,16 @@ class PlannerCreateResponse(BaseModel):
 class VendorCreate(BaseModel):
     user_id: uuid.UUID 
     email: str 
-    email_verified: bool 
+    email_verified: bool
+    role: str
     created_at: datetime 
 
 class VendorCreateResponse(BaseModel):
     success: bool
     message: str
     data: VendorCreate
+
+class VerifyOtpInput(BaseModel):
+    user_id: uuid.UUID
+    otp: str
+    role: str 
