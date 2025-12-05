@@ -8,18 +8,21 @@ sessions.
 
 from sqlmodel import select
 from src.authentication.models import Planners, Vendors
-from src.authentication.schemas import UserInput, VerifyOtpInput, LoginInput
+from src.authentication.schemas import UserInput, VerifyOtpInput, LoginInput, ForgotPasswordInput, ResetPasswordInput
+from src.emailServices.schemas import OtpTypes
 from sqlmodel.ext.asyncio.session import AsyncSession
 from fastapi import HTTPException, status
 from sqlalchemy.exc import DatabaseError
 from src.utils.auth import generate_password_hash, verify_password_hash, create_token, decode_token
-from src.authentication.models import SignupOtp, ResetPasswordOtp
+from src.authentication.models import SignupOtp, ForgotPasswordOtp
 from datetime import datetime, timezone, timedelta
+import uuid
 
 
 # Token expiration configurations
 access_token_expiry = timedelta(hours=2)
 refresh_token_expiry = timedelta(days=3)
+reset_password_expiry = timedelta(minutes=5)
 
 class AuthServices:
     """Service class for authentication operations.
@@ -55,9 +58,7 @@ class AuthServices:
 
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail= {
-                    "success": False,
-                    "message": f"{user_selected} already exists"}
+                detail=  f"{user_selected} already exists"
             )
         return None
 
@@ -87,7 +88,7 @@ class AuthServices:
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"success": False, "message": "Invalid role provided"}
+                detail="Invalid role provided"
             )
 
         # Verify user doesn't already exist
@@ -117,10 +118,8 @@ class AuthServices:
             await session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                 detail= {
-                    "success": False,
-                    "message": "Internal server error"
-                 }
+                detail=  "Internal server error"
+                 
 
             )
     
@@ -148,10 +147,15 @@ class AuthServices:
             HTTPException: 404 NOT_FOUND if user doesn't exist.
             HTTPException: 500 INTERNAL_SERVER_ERROR if database operation fails.
         """
+
+        if otp_input.otp_type == OtpTypes.SIGNUP:
+            model = SignupOtp
+        elif otp_input.otp_type == OtpTypes.FORGOTPASSWORD:
+            model = ForgotPasswordOtp
         # Retrieve the most recent OTP record for this user
-        otp_statement = (select(SignupOtp)
-                     .where(SignupOtp.user_id == otp_input.user_id)
-                     .order_by(SignupOtp.created_at.desc()))
+        otp_statement = (select(model)
+                     .where(model.user_id == otp_input.user_id)
+                     .order_by(model.created_at.desc()))
         
         result = await session.exec(otp_statement)
         latest_otp_record = result.first()
@@ -160,28 +164,22 @@ class AuthServices:
         if not latest_otp_record:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, 
-                detail={
-                    "success": False,
-                    "message": "no otp found for this user"
-                 })
+                detail= "no otp found for this user"
+                 )
         
         # Validate OTP code matches
         if latest_otp_record.otp != otp_input.otp:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, 
-                detail={
-                    "success": False,
-                    "message": "Invalid OTP code",
-                 })
+                detail="Invalid OTP code"
+                 )
 
         # Check if OTP has expired
         if datetime.now(timezone.utc) > latest_otp_record.expires:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "success":False,
-                    "message": "otp expired, get new otp"
-                }
+                detail="otp expired, get new otp"
+                
             )
         
         # Determine the appropriate model based on user role
@@ -193,46 +191,59 @@ class AuthServices:
             
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"success": False, 
-                        "message": "Invalid role provided"}
+                detail="Invalid role provided"
             )
-
-        # Retrieve the user record
-        user_statement = select(model).where(model.user_id == otp_input.user_id)
-        result = await session.exec(user_statement)
-
-        user = result.first()
-
-        # Validate user exists
-        if not user:
-             raise HTTPException(
-                 status_code=status.HTTP_404_NOT_FOUND, 
-                 detail={
-                    "success": False,
-                    "message": "User not found"
-                 })
         
-        try:
-            # Mark user as verified and delete used OTP
-            user.email_verified = True
-            session.add(user)
-            await session.delete(latest_otp_record)
-            await session.commit()
-            await session.refresh(user)
-            return user
+        if type == "signup":
+            # Retrieve the user record
+            user_statement = select(model).where(model.user_id == otp_input.user_id)
+            result = await session.exec(user_statement)
 
-        except DatabaseError:
-            # Rollback transaction on database error
-            await session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                 detail= {
-                    "success": False, 
-                    "message": "Internal server error"
-                 }
+            user = result.first()
 
-            )
-    
+            # Validate user exists
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, 
+                    detail="User not found"
+                    )
+        
+
+            try:
+                # Mark user as verified and delete used OTP
+                user.email_verified = True
+                session.add(user)
+                await session.delete(latest_otp_record)
+                await session.commit()
+                await session.refresh(user)
+                return user
+
+            except DatabaseError:
+                # Rollback transaction on database error
+                await session.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Internal server error"
+                    
+
+                )
+        
+        if otp_input.otp_type == OtpTypes.FORGOTPASSWORD:
+            try:
+                await session.delete(latest_otp_record)
+                await session.commit()
+                return {
+                    "user_id": latest_otp_record.user_id,
+                    "role": otp_input.role 
+                }
+
+            except DatabaseError:
+                await session.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Internal server error"
+                )
+            
     async def loginUser(self, loginInput: LoginInput, session:AsyncSession):
         """Authenticate a user and generate access tokens.
         
@@ -258,7 +269,7 @@ class AuthServices:
            
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"success": False, "message": "Invalid role provided"}
+                detail="Invalid role provided"
             )
 
         # Query user by email
@@ -269,7 +280,7 @@ class AuthServices:
         # Reusable exception for invalid credentials
         INVALID_CREDENTIALS = HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"success": False, "message": "Invalid Credentials"}
+            detail="Invalid Credentials"
         )
 
         # Validate user exists
@@ -285,8 +296,8 @@ class AuthServices:
 
         # Generate authentication tokens
         user_dict = user.model_dump()
-        access_token = create_token(user_dict, access_token_expiry)
-        refresh_token = create_token(user_dict, refresh_token_expiry, is_refresh=True)
+        access_token = create_token(user_dict, access_token_expiry, type="access")
+        refresh_token = create_token(user_dict, refresh_token_expiry, type="refresh")
 
         # Combine user data with tokens
         user_details = {
@@ -297,3 +308,77 @@ class AuthServices:
         
         
         return user_details
+    
+    async def forgotPassword(self, forgotPasswordInput: ForgotPasswordInput, session: AsyncSession):
+
+         # Determine the appropriate model based on user role
+        if forgotPasswordInput.role == "vendor":
+            model = Vendors
+        elif forgotPasswordInput.role == "planner":
+            model = Planners
+        else:
+           
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail= "Invalid role provided"
+            )
+
+        # Query user by email
+        statement = select(model).where(model.email == forgotPasswordInput.email)
+        result = await session.exec(statement)
+        user = result.first()
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail= "email is not registered"
+            ) 
+        
+        return user
+    
+    
+    async def resetPassword(self, resetPasswordInput: ResetPasswordInput, session: AsyncSession):
+        # 1. Decode and Validate Token
+        try:
+            token_decode = decode_token(resetPasswordInput.token)
+        except Exception:
+             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+
+        # 2. Check Token Type
+        if token_decode.get('type') != "reset":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token type")
+
+        # 3. Model Selection
+        if resetPasswordInput.role == "planner":
+            model = Planners
+        elif resetPasswordInput.role == "vendor":
+            model = Vendors
+        else:
+            raise HTTPException(status_code=400, detail="Invalid role provided")
+
+        # 4. Extract User ID from Token (The safest identifier)
+        user_id_from_token = token_decode.get('sub')
+
+        
+        statement = select(model).where(model.user_id == uuid.UUID(user_id_from_token))
+        result = await session.exec(statement)
+        user = result.first()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # 6. Update Password
+        new_hashed_password = generate_password_hash(resetPasswordInput.new_password)
+        user.password_hash = new_hashed_password
+
+        try:
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+            return user
+        except DatabaseError:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error"
+            )

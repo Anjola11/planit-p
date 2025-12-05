@@ -163,31 +163,14 @@ class Vendors(SQLModel, table=True):
         sa_column=Column(pg.TIMESTAMP(timezone=True))
     )
 
-def get_expiry_time():
+def get_expiry_time(minutes):
     """Generate OTP expiration timestamp.
-    
-    Calculates expiration time as 10 minutes from current UTC time.
-    Used as default value for OTP expiration fields.
-    
-    Returns:
-        datetime: UTC timestamp 10 minutes in the future.
     """
-    return datetime.now(timezone.utc) + timedelta(minutes=10)
+    return datetime.now(timezone.utc) + timedelta(minutes=minutes)
 
 class SignupOtp(SQLModel, table=True):
-    """Email verification OTP records table.
-    
-    Stores one-time passwords sent to users for email verification
-    during the signup process. Records expire after 10 minutes.
-    
-    Attributes:
-        otp_id: Primary key, auto-generated UUID.
-        otp: The verification code (6-digit numeric string).
-        user_id: Reference to user requiring verification (not a foreign key).
-        created_at: OTP generation timestamp (UTC).
-        expires: Expiration timestamp (10 minutes after creation).
-    """
-    __tablename__ = "SignupOtp"
+   
+    __tablename__ = "signupOtp"
     
     otp_id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     otp: str
@@ -196,10 +179,10 @@ class SignupOtp(SQLModel, table=True):
         default_factory=utc_now,
         sa_column=Column(pg.TIMESTAMP(timezone=True)))
     expires: datetime = Field(
-        default_factory=get_expiry_time,
+        default_factory=lambda: get_expiry_time(10),
         sa_column=Column(pg.TIMESTAMP(timezone=True)))
 
-class ResetPasswordOtp(SQLModel, table=True):
+class ForgotPasswordOtp(SQLModel, table=True):
     """Password reset OTP records table.
     
     Stores one-time passwords sent to users for password reset
@@ -212,7 +195,7 @@ class ResetPasswordOtp(SQLModel, table=True):
         created_at: OTP generation timestamp (UTC).
         expires: Expiration timestamp (10 minutes after creation).
     """
-    __tablename__ = "PasswordResetOtp"
+    __tablename__ = "forgotPasswordOtp"
     
     otp_id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     otp: str
@@ -221,5 +204,6 @@ class ResetPasswordOtp(SQLModel, table=True):
         default_factory=utc_now,
         sa_column=Column(pg.TIMESTAMP(timezone=True)))
     expires: datetime = Field(
-        default_factory=get_expiry_time,
+        default_factory=lambda: get_expiry_time(10),
         sa_column=Column(pg.TIMESTAMP(timezone=True)))
+

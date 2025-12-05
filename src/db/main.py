@@ -36,7 +36,7 @@ async def init_db():
     async with engine.begin() as conn:
         # Import models here to ensure they are registered with SQLModel's
         # metadata before `create_all` is invoked.
-        from src.authentication.models import Vendors, Planners, SignupOtp, ResetPasswordOtp
+        from src.authentication.models import Vendors, Planners, SignupOtp, ForgotPasswordOtp
         
         # Create all tables defined in imported models
         await conn.run_sync(SQLModel.metadata.create_all)

@@ -6,7 +6,8 @@ Supports email verification and welcome emails for new users.
 """
 
 from sqlmodel.ext.asyncio.session import AsyncSession
-from src.authentication.models import SignupOtp, ResetPasswordOtp
+from src.authentication.models import SignupOtp, ForgotPasswordOtp
+from src.emailServices.schemas import OtpTypes
 from src.utils.otp import generate_otp
 from sqlalchemy.exc import DatabaseError
 from fastapi import HTTPException, status
@@ -54,7 +55,7 @@ class EmailServices:
         self.configuration.api_key['api-key'] = self.BREVO_API_KEY
         self.api_instance = brevo_python.TransactionalEmailsApi(brevo_python.ApiClient(self.configuration))
 
-    async def save_otp(self,user_id: uuid.UUID, session:AsyncSession):
+    async def save_otp(self,user_id: uuid.UUID, session:AsyncSession, type:OtpTypes):
         """Generate and persist an OTP for user verification.
         
         Creates a new OTP record in the database associated with the given user.
@@ -70,8 +71,13 @@ class EmailServices:
         Raises:
             HTTPException: 500 INTERNAL_SERVER_ERROR if database operation fails.
         """
+
+        if type == "signup":
+            model = SignupOtp
+        elif type == "forgotPassword":
+            model = ForgotPasswordOtp
         # Create new OTP record with generated code
-        new_otp = SignupOtp(
+        new_otp = model(
             otp=generate_otp(),
             user_id=user_id
         )
@@ -88,10 +94,8 @@ class EmailServices:
             await session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    "success": False,
-                    "message": "Internal server error"
-                }
+                detail= "Internal server error"
+                
             )
         
     def render_template(self,template_name: str, payload: dict = {} ):
@@ -226,3 +230,29 @@ The Planit Team"""
 
         # Send the welcome email
         return self.send_email(user_email, 'Welcome to Planit!', html, text_content)
+    
+    def send_forgot_password_otp(self, user_email: str, otp_code: str, user_name: str):
+       
+        # Render HTML email template with OTP details
+        html = self.render_template('forgot-password-otp', {
+            'username': user_name,
+            'otpCode': otp_code,
+            'expiryTime': '5 minutes'
+        })
+
+        # Create plain text fallback version
+        text_content = f"""Hello {{ username }},
+
+We received a request to reset the password for your Planit account.
+
+Your Password Reset Code is: {{ otpCode }}
+
+This code will expire in {{ expiryTime }}.
+
+If you did not request a password reset, please ignore this email. Your account remains safe.
+
+Best regards,
+The Planit Team"""
+
+        # Send the verification email
+        return self.send_email(user_email, 'Planit - Forgot Password Code', html, text_content)

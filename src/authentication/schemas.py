@@ -5,11 +5,12 @@ endpoints. These schemas provide automatic validation, serialization, and
 API documentation via FastAPI's integration with Pydantic.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr
 from datetime import datetime
 import uuid
 from typing import Optional
 from enum import Enum
+from src.emailServices.schemas import OtpTypes
 
 class UserRole(str, Enum):
     """Enumeration of available user roles in the system.
@@ -19,6 +20,8 @@ class UserRole(str, Enum):
     """
     VENDOR = "vendor"
     PLANNER = "planner"
+
+
 
 class Address(BaseModel):
     """Address information schema.
@@ -60,7 +63,7 @@ class UserInput(BaseModel):
     all fields to create a complete user account.
     """
     fullName: str
-    email: str
+    email: EmailStr
     password: str
     role: UserRole
 
@@ -71,7 +74,7 @@ class User(BaseModel):
     and verification. Excludes sensitive fields like password hash.
     """
     user_id: uuid.UUID 
-    email: str 
+    email: EmailStr 
     email_verified: bool 
     role: str
     created_at: datetime 
@@ -95,6 +98,7 @@ class VerifyOtpInput(BaseModel):
     user_id: uuid.UUID
     otp: str
     role: str 
+    otp_type: OtpTypes
 
 class LoginInput(BaseModel):
     """User login request schema.
@@ -102,7 +106,7 @@ class LoginInput(BaseModel):
     Validates authentication credentials. Role is required to
     determine which user table (planners/vendors) to query.
     """
-    email: str
+    email: EmailStr
     password: str
     role: UserRole
 
@@ -115,7 +119,7 @@ class LoginData(BaseModel):
     """
     user_id: uuid.UUID
     fullName: str
-    email: str
+    email: EmailStr
     email_verified: bool
     role: str
     created_at: datetime
@@ -131,3 +135,22 @@ class LoginResponse(BaseModel):
     success: bool
     message: str
     data: LoginData
+
+
+class ForgotPasswordInput(BaseModel):
+    email: EmailStr
+    role: UserRole
+
+class ForgotPasswordResponse(BaseModel):
+    success: bool
+    message: str
+    data: dict = {}
+
+class ForgotPasswordInput(BaseModel):
+    email: EmailStr
+    role: UserRole
+
+class ResetPasswordInput(BaseModel):
+    new_password: str
+    token: str
+    role: UserRole

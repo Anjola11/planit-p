@@ -54,7 +54,7 @@ def verify_password_hash(password: str, hashed_password: str) -> bool:
 
 
 
-def create_token(user_data: dict, expiry_delta: timedelta, is_refresh: bool = False):
+def create_token(user_data: dict, expiry_delta: timedelta, type: str):
     """Create and sign a JWT for the given user.
 
     The token contains standard claims:
@@ -91,13 +91,13 @@ def create_token(user_data: dict, expiry_delta: timedelta, is_refresh: bool = Fa
     # Compute absolute expiration time once to keep iat/exp consistent.
     payload['exp'] = current_time + expiry_delta
 
-    if is_refresh:
-        payload['type'] = 'refresh'
-    else:
-        payload['type'] = 'access'
-        # Keep only non-sensitive user claims in tokens.
-        payload['email'] = user_data.get('email')
+    payload['type'] = type.lower()
+
+    if type in ["access", "reset"]:
         payload['role'] = user_data.get('role')
+
+    if type == "access":
+        payload['email'] = user_data.get('email')
 
     token = jwt.encode(
         payload=payload,
@@ -132,3 +132,4 @@ def decode_token(token: str) -> dict:
     )
 
     return token_data
+
