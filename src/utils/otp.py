@@ -9,20 +9,8 @@ authentication contexts.
 import secrets
 import string
 
-
 def generate_otp(length: int = 6) -> str:
-    """Generate a numeric OTP of the requested length.
-
-    The function returns a string composed only of digits. It uses
-    `secrets.choice` to pick digits from `string.digits`, which provides
-    cryptographically secure randomness suitable for one-time codes.
-
-    Args:
-        length: Number of digits in the OTP. Defaults to 6.
-
-    Returns:
-        A string containing the generated numeric OTP.
-    """
-
+    
+    # Generate cryptographically secure random digits
     otp = "".join(secrets.choice(string.digits) for _ in range(length))
     return otp
