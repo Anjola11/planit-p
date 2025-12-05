@@ -85,7 +85,7 @@ def create_token(user_data: dict, expiry_delta: timedelta, is_refresh: bool = Fa
     payload = {
         'iat': current_time,
         'jti': str(uuid.uuid4()),
-        'sub': str(user_data.get('id')),
+        'sub': str(user_data.get('user_id')),
     }
 
     # Compute absolute expiration time once to keep iat/exp consistent.
