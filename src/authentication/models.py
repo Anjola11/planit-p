@@ -93,9 +93,22 @@ class Vendors(SQLModel, table=True):
 def get_expiry_time():
     return datetime.now(timezone.utc) + timedelta(minutes=10)
 
-class Otp(SQLModel, table=True):
+class SignupOtp(SQLModel, table=True):
 
-    __tablename__ = "Otp"
+    __tablename__ = "SignupOtp"
+    otp_id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    otp: str
+    user_id: uuid.UUID
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(pg.TIMESTAMP(timezone=True)))
+    expires: datetime = Field(
+        default_factory=get_expiry_time,
+        sa_column=Column(pg.TIMESTAMP(timezone=True)))
+
+class ResetPasswordOtp(SQLModel, table=True):
+
+    __tablename__ = "PasswordResetOtp"
     otp_id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     otp: str
     user_id: uuid.UUID

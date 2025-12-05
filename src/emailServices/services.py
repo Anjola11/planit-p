@@ -1,5 +1,5 @@
 from sqlmodel.ext.asyncio.session import AsyncSession
-from src.authentication.models import Otp
+from src.authentication.models import SignupOtp, ResetPasswordOtp
 from src.utils.otp import generate_otp
 from sqlalchemy.exc import DatabaseError
 from fastapi import HTTPException, status
@@ -33,7 +33,7 @@ class EmailServices:
         self.api_instance = brevo_python.TransactionalEmailsApi(brevo_python.ApiClient(self.configuration))
 
     async def save_otp(self,user_id: uuid.UUID, session:AsyncSession):
-        new_otp = Otp(
+        new_otp = SignupOtp(
             otp=generate_otp(),
             user_id=user_id
         )
