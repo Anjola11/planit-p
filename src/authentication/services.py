@@ -194,7 +194,7 @@ class AuthServices:
                 detail="Invalid role provided"
             )
         
-        if type == "signup":
+        if otp_input.otp_type == OtpTypes.SIGNUP:
             # Retrieve the user record
             user_statement = select(model).where(model.user_id == otp_input.user_id)
             result = await session.exec(user_statement)
