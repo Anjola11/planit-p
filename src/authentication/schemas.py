@@ -154,3 +154,12 @@ class ResetPasswordInput(BaseModel):
     new_password: str
     token: str
     role: UserRole
+
+class RenewAccessTokenInput(BaseModel):
+    refresh_token: str
+    role: UserRole
+
+class RenweAccessTokenResponse(BaseModel):
+    success: bool
+    message: str
+    data: dict = {}

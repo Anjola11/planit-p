@@ -110,21 +110,7 @@ def create_token(user_data: dict, expiry_delta: timedelta, type: str):
 
 
 def decode_token(token: str) -> dict:
-    """Decode and verify a JWT using the configured signing key.
-
-    This function centralizes token decoding to make it easy to add
-    common verification options (audience, issuer, leeway) in one place.
-
-    Args:
-        token: Signed JWT string.
-
-    Returns:
-        Decoded token payload as a dict.
-
-    Raises:
-        `jwt.PyJWTError` subclasses on invalid or expired tokens.
-    """
-
+    
     try:
 
         token_data = jwt.decode(
@@ -134,15 +120,18 @@ def decode_token(token: str) -> dict:
             leeway=10
         )
 
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Token has expired"
+        )
     except jwt.InvalidTokenError:
-    # Handles malformed tokens, wrong signatures, or tampered data
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="Invalid token."
         )
 
     except Exception as e:
-        # OPTIONAL: Catch unexpected system errors (like a code bug)
         print(f"Unexpected error: {e}") 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
